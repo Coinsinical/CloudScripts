@@ -1,4 +1,5 @@
 #!/bin/bash
+#set -xv
 
 access_token=$1
 
@@ -10,7 +11,12 @@ show_account(){
 
 #查看实例配置种类
 show_types(){
-	curl https://api.linode.com/v4/linode/types |sed 's/},/\n/g'| grep -E '"id"|"lable" |"memory"|"vcpus"|"gpus"|"cpus"' |awk -F , '{print $1,$2}'| sed 's/{//g'
+	curl https://api.linode.com/v4/linode/types | sed 's/},/\n/g'| grep -E '"id"|"lable" |"memory"|"vcpus"|"gpus"|"cpus"' | awk -F , '{print $1,$2}'| sed 's/{//g'
+}
+
+#查看实例地区
+show_regions(){
+	curl https://api.linode.com/v4/linode/types | json_pp
 }
 
 #创建虚拟机 地区：
@@ -20,7 +26,7 @@ create_linode(){
 	read -p "请输入标签: " label
 	read -p "请输入系统: " image
 	read -p "请输入实例配置: " type
-	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d ' {"image": ""$image"","root_pass": ""$password"","label": ""$label"","type": ""$type"","region": ""$region"" }' https://api.linode.com/v4/linode/instances
+	curl -X POST https://api.linode.com/v4/linode/instances -H "Authorization: Bearer $access_token" -H "Content-type: application/json" -d "{\"type\": \"$type\", \"region\": \"$region\", \"image\": \"linode/$image\", \"root_pass\": \"$password\", \"label\":\"$label\"}" | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g'
 }
 
 #删除虚拟机
@@ -32,7 +38,7 @@ delete_linode(){
 
 #查看账户内虚拟机
 show_linode(){
-	instances=`curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/linode/instances |sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g'`
+	instances=$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/linode/instances |sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g')
 	echo -e "$instances \n"
 	number=$(echo -e "$instances \n" | grep "id" | wc -l)
 	echo -e "您的账户共有$number台实例"
