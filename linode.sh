@@ -3,6 +3,11 @@
 
 access_token=$1
 
+#生成随机密码
+randpw(){
+	</dev/urandom tr -dc '12345qwertQWERTasdfgASDFGzxcvbZXCVB' | head -c12
+}
+
 #查看账户信息
 show_account(){
 	echo -e "$access_token"
@@ -22,11 +27,29 @@ show_regions(){
 #创建虚拟机 地区：
 create_linode(){
 	read -p "请输入地区: " region
-	read -p "请输入root密码: " password
-	read -p "请输入标签: " label
-	read -p "请输入系统: " image
-	read -p "请输入实例配置: " type
+	read -p "请输入root密码: （留空则生成随机密码）" password
+	read -p "请输入标签: （可以留空）" label
+	read -p "请输入系统: （默认为debian10）" image
+	read -p "请输入实例配置: （默认为g6-nanode-1）" type
+	
+	if [ -z $password ]
+	then
+		password=$(randpw)
+	fi
+	
+	if [ -z $image ]
+	then
+		image=debian10
+	fi
+	
+	if [ -z $type ]
+	then
+		type=g6-nanode-1
+	fi
+	
 	curl -X POST https://api.linode.com/v4/linode/instances -H "Authorization: Bearer $access_token" -H "Content-type: application/json" -d "{\"type\": \"$type\", \"region\": \"$region\", \"image\": \"linode/$image\", \"root_pass\": \"$password\", \"label\":\"$label\"}" | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g'
+	
+	echo -E "密码为"$password""
 }
 
 #删除虚拟机
@@ -38,7 +61,7 @@ delete_linode(){
 
 #查看账户内虚拟机
 show_linode(){
-	instances=$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/linode/instances |sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g')
+	instances=$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/linode/instances | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g')
 	echo -e "$instances \n"
 	number=$(echo -e "$instances \n" | grep "id" | wc -l)
 	echo -e "您的账户共有$number台实例"
