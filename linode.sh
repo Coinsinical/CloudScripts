@@ -1,5 +1,5 @@
 #!/bin/bash
-#set -xv
+set -xv
 file="./api.txt"
 access_token=$1
 
@@ -56,7 +56,9 @@ linode_rebuild(){
 		image=debian10
 	fi
 	
-	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"image\": \"$image\",\"root_pass\": \"$password\"}" https://api.linode.com/v4/linode/instances/$id/rebuild -s
+	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"image\": \"linode/$image\",\"root_pass\": \"$password\"}" https://api.linode.com/v4/linode/instances/$id/rebuild -s | json_pp
+	
+	echo "密码为$password"
 }
 
 
@@ -141,37 +143,49 @@ show_linode(){
 
 find_linode(){
 	read -p "请输入需要查找的实例IP:" IP
+	isFound=0
 	for token in `cat ./available.txt`
 		do 
-			if [ -n $(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/linode/instances -s | sed 's/,/\n/g' | grep -oE "$IP") ]
+			if [ -z $(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/linode/instances -s | json_pp | grep -o "$IP") ]
 				then
 					continue
 				else 
-					access_token=token 
+					access_token=${token}
+					isFound=1
 					break
-				fi
-			done
-	show_linode
+			fi
+		done
+	if [ $isFound -eq 1 ];then
+		show_linode
+	else
+		echo "未找到实例,该实例所在账户可能已被封禁！"
+	fi
 }
 
 
 show_menu(){
 	echo -e  "
   ${green}linode 管理脚本${plain}
-————————————————
+—————————————————————
   ${green}0.${plain} 退出脚本
-————————————————
+  
+————— 账号相关 ——————
+
   ${green}1.${plain} 登陆账号
   ${green}2.${plain} 检测API
-————————————————
+  
+————— 实例相关 ——————
+
   ${green}3.${plain} 创建实例
   ${green}4.${plain} 删除实例
   ${green}5.${plain} 查看实例 
   ${green}6.${plain} 重置密码
   ${green}7.${plain} 搜寻实例
-————————————————
+  ${green}8.${plain} 重装实例
+  
+—————————————————————
  "
-	echo && read -p "请输入选择 [0-7]: " num
+	echo && read -p "请输入选择 [0-8]: " num
 	case "$num" in
 		0)exit 0
 		;;
@@ -189,7 +203,9 @@ show_menu(){
 		;;
 		7)find_linode
 		;;
-		*) echo -e "${red}\n请输入正确的数字 [0-6]${plain}" && show_menu
+		8)linode_rebuild
+		;;
+		*) echo -e "${red}\n请输入正确的数字 [0-8]${plain}" && show_menu
 		;;
 	esac	
 }
