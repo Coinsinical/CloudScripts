@@ -5,7 +5,7 @@
 regions=("ap-south" "ap-northeast" "ap-west" "ap-southeast" "eu-central" "eu-west" "ca-central" "us-central" "us-west" "us-east" "us-southeast")
 
 ##文件位置
-file="./api.txt"
+file="./doc/api.txt"
 
 ##命令参数
 access_token=$1
@@ -16,17 +16,69 @@ access_token=$1
 
 ##获取账号硬盘
 
-
-#生成随机密码
+##功能性函数
+##生成随机密码
 randpw(){
 	</dev/urandom tr -dc '12345qwertQWERTasdfgASDFGzxcvbZXCVB' | head -c12
+}
+
+##API相关
+##检测API
+check_api(){
+	if [ -z $1 ];then		
+		rm -rf ./doc/available.txt 
+		for token in $(cat $file)
+			do 
+				if [ -n "$(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/account -s | grep -E "errors")" ] 
+					then
+						echo "$token is invalid"
+						echo $token >> ./doc/unavailable.txt
+				else 
+				  echo "$token" >> ./doc/available.txt
+				fi
+			done
+		total="$(wc -l ./doc/api.txt | grep -Eo '[0-9]*')"	  
+		available="$(wc -l ./doc/available.txt | grep -Eo '[0-9]*')"
+		echo "共检测${total}个token，有效token${available}个" 
+	else
+		echo "正在检测API是否可用"
+		if [ -n "$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/account -s | grep -E "errors")" ]
+			then
+				echo "$access_token is invalid"
+				exit 0	
+		fi
+	fi
+}
+
+save_api(){
+    isExist=false
+	if [ ! -e "./doc/api.txt" ]
+	then 
+	    echo "API存储文件不存在，即将创建。。。"
+		mkdir -p doc
+		touch ./doc/api.txt
+	else
+	    for token in $(cat ./doc/api.txt )
+		do
+	        if [ access_token = token ];then
+			    isExist=true
+				echo "API已存在，请进行下一步操作"				
+			    break
+			fi
+	    done
+			
+		if [ $isExist = false ];then
+		    echo $access_token >> ./doc/api.txt
+			echo "API已添加，请进行下一步操作"
+		fi
+	fi	 
 }
 
 ##重启实例
 reboot_linode(){
 	id=$1
 	if [ -z $id ];then
-		show_linode
+	    show_linode
 		read -p  '请输入需要重启的实例ID: ' id
 	fi
 	
@@ -68,32 +120,7 @@ reset_password(){
 
 	echo -E "密码为${password}"
 }
-##检测API
-check_api(){
-	if [ -z $1 ];then		
-		rm -rf ./available.txt 
-		for token in `cat $file`
-			do 
-				if [ -n "$(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/account -s | grep -E "errors")" ] 
-					then
-						echo "$token is invalid"
-						echo $token >> ./unavailable.txt
-				else 
-				  echo "$token" >> ./available.txt
-				fi
-			done
-		total="$(wc -l ./api.txt | grep -Eo '[0-9]*')"	  
-		available="$(wc -l ./available.txt | grep -Eo '[0-9]*')"
-		echo "共检测${total}个token，有效token${available}个" 
-	else
-		echo "正在检测API是否可用"
-		if [ -n "$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/account -s | grep -E "errors")" ]
-			then
-				echo "$access_token is invalid"
-				exit 0
-		fi
-	fi
-}
+
 
 ##重装系统
 linode_rebuild(){
@@ -128,7 +155,7 @@ linode_resize(){
 		type=g6-nanode-2
 	fi
 	
-	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"type\":\"$type\"}' https://api.linode.com/v4/linode/instances/$id/resize
+	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"type\":\"$type\"}' https://api.linode.com/v4/linode/instances/$id/resize"
 }
 
 
@@ -169,8 +196,6 @@ show_regions(){
 
 #创建虚拟机 地区：
 create_linode(){
-	check_api 1
-	
 	read -p "请输入地区: " region
 	read -p "请输入root密码: （留空则生成随机密码）" password
 	read -p "请输入标签: （可以留空）" label
@@ -246,10 +271,11 @@ find_linode(){
 
 
 show_menu(){
+	echo -ne "\r\r"
 	echo -e  "
   ${green}linode 管理脚本${plain}
 —————————————————————
-  ${green}0.${plain} 退出脚本
+  ${green} 0.${plain} 退出脚本
   
 ————— 账号相关 ——————
 
@@ -294,9 +320,12 @@ show_menu(){
 		;;
 		10)linode_resize
 		;;
-		*) echo -e "${red}\n请输入正确的数字 [0-9]${plain}" && show_menu
+		*) echo -e "${red}\n请输入正确的数字 [0-10]${plain}" && show_menu
 		;;
 	esac	
 }
-#show_regions 
+
+
+check_api 1 ##使用脚本即对API可用性进行检查
+save_api ##保存可用API
 show_menu
