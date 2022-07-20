@@ -1,7 +1,20 @@
 #!/bin/bash
-set -xv
+#set -xv
+
+##linode参数
+regions=("ap-south" "ap-northeast" "ap-west" "ap-southeast" "eu-central" "eu-west" "ca-central" "us-central" "us-west" "us-east" "us-southeast")
+
+##文件位置
 file="./api.txt"
+
+##命令参数
 access_token=$1
+
+##基础函数
+##获取实例状态
+
+
+##获取账号硬盘
 
 
 #生成随机密码
@@ -9,37 +22,80 @@ randpw(){
 	</dev/urandom tr -dc '12345qwertQWERTasdfgASDFGzxcvbZXCVB' | head -c12
 }
 
+##重启实例
+reboot_linode(){
+	id=$1
+	if [ -z $id ];then
+		show_linode
+		read -p  '请输入需要重启的实例ID: ' id
+	fi
+	
+	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST https://api.linode.com/v4/linode/instances/$id/reboot -s
+}
+
 #重置密码
 reset_password(){
 	show_linode
 	read -p "请输入需要重置密码的虚拟机ID：" id
-	read -p "请输入root密码：（留空则生成随机密码）" pwd
+	read -p "请输入root密码：（留空则生成随机密码）" password
 	if [ -z $password ]
 	then
 		password=$(randpw)
 	fi
 	
-	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"root_pass\": \"$(password)\"}" https://api.linode.com/v4/linode/instances/$id/password
-}
-
-#重装系统
-
-check_api(){
-	rm -rf ./available.txt 
-	for token in `cat $file`
-		do 
-			if [ -n "$(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/account -s | grep -E "errors")" ] 
-				then
-					echo "$token is invalid"
-		    else 
-			  echo "$token" >> ./available.txt
-		    fi
+	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST  https://api.linode.com/v4/linode/instances/$id/shutdown -s
+	
+	echo "等待实例关机，10s后重置密码"
+	
+	for i in {15..1}
+		do     
+			echo  -n  "${i}s后重置密码!"
+			echo  -ne "\r\r"        ####echo -e 处理特殊字符  \r 光标移至行首，但不换行
+			sleep 1
 		done
-	total="$(wc -l ./api.txt | grep -Eo '[0-9]*')"	  
-	available="$(wc -l ./available.txt | grep -Eo '[0-9]*')"
-	echo "共检测${total}个token，有效token${available}个" 
+		
+	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"root_pass\": \"${password}\"}" https://api.linode.com/v4/linode/instances/$id/password -s
+	
+	echo "正在重置密码，等待30s后开机"
+	
+	for i in {30..1}
+		do     
+			echo  -n  "${i}s后开机!"
+			echo  -ne "\r\r"        ####echo -e 处理特殊字符  \r 光标移至行首，但不换行
+			sleep 1
+		done
+	reboot_linode $id
+
+	echo -E "密码为${password}"
+}
+##检测API
+check_api(){
+	if [ -z $1 ];then		
+		rm -rf ./available.txt 
+		for token in `cat $file`
+			do 
+				if [ -n "$(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/account -s | grep -E "errors")" ] 
+					then
+						echo "$token is invalid"
+						echo $token >> ./unavailable.txt
+				else 
+				  echo "$token" >> ./available.txt
+				fi
+			done
+		total="$(wc -l ./api.txt | grep -Eo '[0-9]*')"	  
+		available="$(wc -l ./available.txt | grep -Eo '[0-9]*')"
+		echo "共检测${total}个token，有效token${available}个" 
+	else
+		echo "正在检测API是否可用"
+		if [ -n "$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/account -s | grep -E "errors")" ]
+			then
+				echo "$access_token is invalid"
+				exit 0
+		fi
+	fi
 }
 
+##重装系统
 linode_rebuild(){
 	show_linode
 	read -p "请输入需要重装的虚拟机ID: " id
@@ -62,16 +118,35 @@ linode_rebuild(){
 }
 
 
+#升级实例
+linode_resize(){
+	show_linode
+	read -p "请输入需要升级的实例ID: " id
+	read -p "请输入需要升级的配置:（默认为g6-nanode-2） " type
+	
+	if [ -z $type ];then
+		type=g6-nanode-2
+	fi
+	
+	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"type\":\"$type\"}' https://api.linode.com/v4/linode/instances/$id/resize
+}
+
+
+
 #查看账户信息
 show_account(){
 	if [ -z $access_token ]
 		then 
 			echo "您现在还没有登陆账号"
+			cat ./available.txt
+			read -p "请输入需要登录账号的token:" access_token
+			
 	else
 		echo  "您现在使用的token为${access_token}"
 		read -p "是否需要更换账号？[Y/N](默认为N)" choice
 		if (choice=='Y')
-			then 
+			then
+				cat ./available.txt
 				read -p "请输入新账号的token:" access_token
 				show_menu
 		else
@@ -89,11 +164,13 @@ show_types(){
 
 #查看实例地区
 show_regions(){
-	curl https://api.linode.com/v4/linode/types -s | json_pp
+	curl https://api.linode.com/v4/linode/region -s | json_pp
 }
 
 #创建虚拟机 地区：
 create_linode(){
+	check_api 1
+	
 	read -p "请输入地区: " region
 	read -p "请输入root密码: （留空则生成随机密码）" password
 	read -p "请输入标签: （可以留空）" label
@@ -117,7 +194,7 @@ create_linode(){
 	
 	curl -X POST https://api.linode.com/v4/linode/instances -H "Authorization: Bearer $access_token" -H "Content-type: application/json" -d "{\"type\": \"$type\", \"region\": \"$region\", \"image\": \"linode/$image\", \"root_pass\": \"$password\", \"label\":\"$label\"}" -s | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g'
 	
-	echo -E "密码为"$password""
+	echo -E "密码为${password}"
 }
 
 # https://www.linode.com/docs/guides/rescue-and-rebuild/
@@ -135,7 +212,7 @@ delete_linode(){
 
 #查看账户内虚拟机
 show_linode(){
-	instances=$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/linode/instances -s | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"' | sed 's/{/\n /g')
+	instances=$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/linode/instances -s | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"|"status"|"type"' | sed 's/{/\n /g')
 	echo -e "$instances \n"
 	number=$(echo -e "$instances \n" | grep "id" | wc -l)
 	echo -e "您的账户共有$number台实例"
@@ -157,9 +234,14 @@ find_linode(){
 		done
 	if [ $isFound -eq 1 ];then
 		show_linode
+		echo "该实例所在账号API为${access_token}"
 	else
 		echo "未找到实例,该实例所在账户可能已被封禁！"
 	fi
+	
+	echo "* 按回车键返回主菜单 *"
+	show_menu
+	
 }
 
 
@@ -171,17 +253,20 @@ show_menu(){
   
 ————— 账号相关 ——————
 
-  ${green}1.${plain} 登陆账号
-  ${green}2.${plain} 检测API
+  ${green} 1.${plain} 登陆账号
+  ${green} 2.${plain} 检测API
   
 ————— 实例相关 ——————
 
-  ${green}3.${plain} 创建实例
-  ${green}4.${plain} 删除实例
-  ${green}5.${plain} 查看实例 
-  ${green}6.${plain} 重置密码
-  ${green}7.${plain} 搜寻实例
-  ${green}8.${plain} 重装实例
+  ${green} 3.${plain} 创建实例
+  ${green} 4.${plain} 删除实例
+  ${green} 5.${plain} 查看实例 
+  ${green} 6.${plain} 重置密码
+  ${green} 7.${plain} 搜寻实例
+  ${green} 8.${plain} 重装实例
+  ${green} 9.${plain} 重启实例
+  ${green}10.${plain} 升级实例
+  
   
 —————————————————————
  "
@@ -205,9 +290,13 @@ show_menu(){
 		;;
 		8)linode_rebuild
 		;;
-		*) echo -e "${red}\n请输入正确的数字 [0-8]${plain}" && show_menu
+		9)reboot_linode
+		;;
+		10)linode_resize
+		;;
+		*) echo -e "${red}\n请输入正确的数字 [0-9]${plain}" && show_menu
 		;;
 	esac	
 }
-	
+#show_regions 
 show_menu
