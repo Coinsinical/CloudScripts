@@ -22,56 +22,76 @@ randpw(){
 	</dev/urandom tr -dc '12345qwertQWERTasdfgASDFGzxcvbZXCVB' | head -c12
 }
 
+
 ##API相关
 ##检测API
 check_api(){
-	if [ -z $1 ];then		
-		rm -rf ./doc/available.txt 
+	if [ -z $1 ];then	
+		rm -rf ./doc/available.txt
+        rm -rf ./doc/unavailable.txt	
 		for token in $(cat $file)
 			do 
 				if [ -n "$(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/account -s | grep -E "errors")" ] 
 					then
 						echo "$token is invalid"
 						echo $token >> ./doc/unavailable.txt
+						if [ -e "./doc/${token}.txt" ];then
+						    mv "./doc/${token}.txt" ./doc/invalid/
+						else
+						    touch "./doc/invalid/${token}.txt"
+					    fi
 				else 
 				  echo "$token" >> ./doc/available.txt
+				  show_linode $token > ./doc/${token}.txt
 				fi
 			done
 		total="$(wc -l ./doc/api.txt | grep -Eo '[0-9]*')"	  
 		available="$(wc -l ./doc/available.txt | grep -Eo '[0-9]*')"
 		echo "共检测${total}个token，有效token${available}个" 
 	else
-		echo "正在检测API是否可用"
+		echo -n "正在检测API是否可用："
 		if [ -n "$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/account -s | grep -E "errors")" ]
 			then
-				echo "$access_token is invalid"
-				exit 0	
+				echo "不可用"
+				exit 0
+		else
+            echo "可用"		
 		fi
 	fi
 }
 
 save_api(){
-    isExist=false
-	if [ ! -e "./doc/api.txt" ]
-	then 
-	    echo "API存储文件不存在，即将创建。。。"
-		mkdir -p doc
-		touch ./doc/api.txt
+	read -p "是否保存API?（默认保存）[y/n]" choice
+	if [ "$choice" = "y" -o -z "$choice" ];then	    
+        isExist="false" ##假设API未保存
+	    if [ ! -e "./doc" ] ##判断是否存在文件夹
+	    then 
+	        echo "存储文件夹不存在，即将创建......."
+		    mkdir -p ./doc/invalid
+		    touch ./doc/api.txt
+	    else ##如果存在文件夹，判断是否存在api.txt
+	        if [ -e ./doc/api.txt ];then
+	            for token in $(cat ./doc/api.txt )
+		        do
+	                if [ $access_token = $token ];then
+			            isExist="true"
+				        echo "API已存在，请进行下一步操作"				
+			            break
+			        fi
+	            done
+		    fi
+	    fi	
+        if [ $isExist = "false" ];then
+		        echo $access_token >> ./doc/api.txt
+				echo $access_token >> ./doc/available.txt
+			    echo "API已添加，请进行下一步操作"
+	    fi
+    elif [ "$choice" = "n" ];then
+	    echo "API将不会保存"
 	else
-	    for token in $(cat ./doc/api.txt )
-		do
-	        if [ access_token = token ];then
-			    isExist=true
-				echo "API已存在，请进行下一步操作"				
-			    break
-			fi
-	    done
-			
-		if [ $isExist = false ];then
-		    echo $access_token >> ./doc/api.txt
-			echo "API已添加，请进行下一步操作"
-		fi
-	fi	 
+	    echo "请输入正确的选项"
+		save_api
+	fi  	
 }
 
 ##重启实例
@@ -149,13 +169,13 @@ linode_rebuild(){
 linode_resize(){
 	show_linode
 	read -p "请输入需要升级的实例ID: " id
-	read -p "请输入需要升级的配置:（默认为g6-nanode-2） " type
+	read -p "请输入需要升级的配置:（默认为g6-nanode-2）" type
 	
 	if [ -z $type ];then
 		type=g6-nanode-2
 	fi
 	
-	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"type\":\"$type\"}' https://api.linode.com/v4/linode/instances/$id/resize"
+	curl -H "Content-Type: application/json" -H "Authorization: Bearer $access_token" -X POST -d "{\"type\":\"$type\"}" https://api.linode.com/v4/linode/instances/$id/resize
 }
 
 
@@ -187,6 +207,20 @@ show_account(){
 #查看实例配置种类
 show_types(){
 	curl https://api.linode.com/v4/linode/types -s | sed 's/},/\n/g'| grep -E '"id"|"lable" |"memory"|"vcpus"|"gpus"|"cpus"' | awk -F , '{print $1,$2}'| sed 's/{//g'
+}
+
+#查看账户内虚拟机
+show_linode(){
+    if [ -z $1 ];then
+	    token=$access_token
+	else
+	    token=$1
+	fi
+	    
+	instances=$(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/linode/instances -s | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"|"status"|"type"|"created"' | sed 's/{/\n /g')
+	echo -e "$instances \n"
+	number=$(echo -e "$instances \n" | grep "id" | wc -l)
+	echo -e "您的账户共有${number}台实例"
 }
 
 #查看实例地区
@@ -235,13 +269,7 @@ delete_linode(){
 	fi
 }
 
-#查看账户内虚拟机
-show_linode(){
-	instances=$(curl -H "Authorization: Bearer $access_token" https://api.linode.com/v4/linode/instances -s | sed 's/,/\n/g' | grep -E '"id":|"ipv4"|"ipv6"|"label"|"image"|"region"|"status"|"type"' | sed 's/{/\n /g')
-	echo -e "$instances \n"
-	number=$(echo -e "$instances \n" | grep "id" | wc -l)
-	echo -e "您的账户共有$number台实例"
-}
+
 
 find_linode(){
 	read -p "请输入需要查找的实例IP:" IP
@@ -271,7 +299,6 @@ find_linode(){
 
 
 show_menu(){
-	echo -ne "\r\r"
 	echo -e  "
   ${green}linode 管理脚本${plain}
 —————————————————————
@@ -326,6 +353,8 @@ show_menu(){
 }
 
 
+##主进程
 check_api 1 ##使用脚本即对API可用性进行检查
+sleep 1
 save_api ##保存可用API
 show_menu
