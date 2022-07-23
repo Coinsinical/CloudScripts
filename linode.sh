@@ -17,6 +17,8 @@ access_token=$1
 ##获取账号硬盘
 
 ##功能性函数
+##检测文件
+
 ##生成随机密码
 randpw(){
 	</dev/urandom tr -dc '12345qwertQWERTasdfgASDFGzxcvbZXCVB' | head -c12
@@ -230,7 +232,35 @@ show_regions(){
 
 #创建虚拟机 地区：
 create_linode(){
-	read -p "请输入地区: " region
+	read -p "请输入地区(1.新加坡 2.日本 3.印度 4.澳大利亚 5.德国 6.英国 7.加拿大 8.美国中部德克萨斯州达拉斯 9.美国西部加利福利亚 10.美国东部新泽西州纽瓦克 11.美国东南部亚特拉大):" num
+	
+	case "$num" in
+		1)region=ap-south
+		;;
+		2)region=ap-northeast
+		;;
+		3)region=ap-west
+		;;
+		4)region=ap-southeast
+		;;
+		5)region=eu-central
+		;;
+		6)region=eu-west
+		;;
+		7)region=ca-central
+		;;
+		8)region=us-central
+		;;
+		9)region=us-west
+		;;
+		10)region=us-east
+		;;
+		11)region=us-southeast
+		;;
+		*) echo -e "${red}\n请输入正确的数字 [1-11]${plain}" && create_linode
+		;;
+	esac
+	
 	read -p "请输入root密码: （留空则生成随机密码）" password
 	read -p "请输入标签: （可以留空）" label
 	read -p "请输入系统: （默认为debian10）" image
@@ -274,25 +304,43 @@ delete_linode(){
 find_linode(){
 	read -p "请输入需要查找的实例IP:" IP
 	isFound=0
-	for token in `cat ./available.txt`
-		do 
-			if [ -z $(curl -H "Authorization: Bearer $token" https://api.linode.com/v4/linode/instances -s | json_pp | grep -o "$IP") ]
+	check_api
+	for content in doc/*.txt
+	do 
+		if [ -z $(cat $content | grep -o "$IP") ]
+		then
+			continue
+		else 
+		    isFound=1
+			access_token=${content:4:`expr ${#content} - 8`}
+			show_linode
+			echo "该实例所在账号API为${access_token}"
+			break
+		fi
+	done
+		
+	if [ $isFound -eq 0 ];then
+		read -p "该实例不属于有效账号，是否在失效账号中查找？(回车默认为y)[y/n]" choice
+		if [ "$choice" = "y" -o -z "$choice" ];then	
+		    for content in doc/invalid/*.txt
+		    do 
+			    if [ -z $(cat $content | grep -o "$IP") ]
 				then
 					continue
 				else 
-					access_token=${token}
 					isFound=1
+					echo "该实例所在账号API为${content:4:`expr ${#content} - 8`},已失效"
+					cat $content
 					break
-			fi
-		done
-	if [ $isFound -eq 1 ];then
-		show_linode
-		echo "该实例所在账号API为${access_token}"
-	else
-		echo "未找到实例,该实例所在账户可能已被封禁！"
+			    fi
+		    done
+	    fi
 	fi
 	
-	echo "* 按回车键返回主菜单 *"
+	if [ $isFound -eq 0 ];then
+	    echo "该实例不属于已知账号！"
+	fi
+	
 	show_menu
 	
 }
