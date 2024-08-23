@@ -26,7 +26,7 @@
 
 
 ##linode参数
-regions=("ap-south" "id-cgk" "ap-northeast" "jp-osa" "ap-west" "in-maa" "ap-southeast" "eu-central" "eu-west" "fr-par" "se-sto" "it-mil" "nl-ams" "es-mad" "ca-central" "us-central" "us-west" "us-east" "us-southeast" "us-ord" "us-iad" "us-sea" "us-mia" "us-lax" "br-gru")
+regions=("ap-south" "id-cgk" "ap-northeast" "jp-osa" "ap-west" "in-maa" "ap-southeast" "au-mel" "eu-central" "eu-west" "gb-lon" "fr-par" "se-sto" "it-mil" "nl-ams" "es-mad" "ca-central" "us-central" "us-west" "us-east" "us-southeast" "us-ord" "us-iad" "us-sea" "us-mia" "us-lax" "br-gru")
 
 ##文件位置
 linode_root_path="./data/Linode"
@@ -424,7 +424,7 @@ show_regions(){
 create_linode(){
 	while true
 	do
-		read -p "请选择地区(1.新加坡 2.印尼雅加达 3.日本东京 4.日本大阪 5.印度孟买 6.印度清奈 7.澳大利亚悉尼 8.德国法兰克福 9.英国伦敦 10.法国巴黎 11.瑞典斯德哥尔摩 12.意大利米兰 13.荷兰阿姆斯特丹 14.西班牙马德里 15.加拿大多伦多 16.美国中部德克萨斯州达拉斯 17.美国西部加利福利亚 18.美国东部新泽西州纽瓦克 19.美国东南部亚特拉大 20.美国芝加哥 21.美国华盛顿 22.美国西雅图 23.美国迈阿密 24.美国洛杉矶 25.巴西圣保罗):" num
+				read -p "请选择地区(1.新加坡 2.印尼雅加达 3.日本东京 4.日本大阪 5.印度孟买 6.印度清奈 7.澳大利亚悉尼 8.澳大利亚墨尔本 9.德国法兰克福 10.英国伦敦1区 11.英国伦敦2区 12.法国巴黎 13.瑞典斯德哥尔摩 14.意大利米兰 15.荷兰阿姆斯特丹 16.西班牙马德里 17.加拿大多伦多 18.美国中部德克萨斯州达拉斯 19.美国西部加利福尼亚 20.美国东部新泽西州纽瓦克 21.美国东南部亚特兰大 22.美国芝加哥 23.美国华盛顿 24.美国西雅图 25.美国迈阿密 26.美国洛杉矶 27.巴西圣保罗):" num
 		
 		if [ ${num} -gt ${#regions[@]} -o ${num} -lt 1 ]; then
 			echo -e "${red}\n请输入正确的数字 [1-${#regions[@]}]${plain}"
