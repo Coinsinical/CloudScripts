@@ -15,7 +15,7 @@ A good way to use shell scripts to manage your linodes
 - 实例配置升级
 
 ## TODO:
-- [] 添加工单提配额功能
+- [ ] 添加工单提配额功能
 
 ## 使用方法
 1. git clone 本仓库至本地
